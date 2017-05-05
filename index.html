@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Force Layout with labels on edges</title>
+<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+<style type="text/css">
+</style>
+</head>
+<body>
+<h1>Workflow Visualization</h1>
+<h3>The graph visualizes all possible paths from one milestone to another. (Nodes represent milestone, edges represent actions)</h3>
+<script type="text/javascript">
+	var workflowModel = {
+  "id": "approval",
+  "name":"Approval Workflow",
+  "description":"Workflow for approval of content created by writers and approved by subeditors and editors",
+  "defaultMilestone":"new",
+  "roles" : {
+    "admin": {
+      "id":"admin",
+      "name":"Admin",
+      "description":"Admin users"
+    },
+	"candidate": {
+      "id":"candidate",
+      "name":"Candidate",
+      "description":"Candidates"
+    }
+  },
+  "actions":{
+    "apply": {
+		"id":"apply",
+		"name":"Apply",
+		"description":"Apply for position",
+		"role":["candidate"],
+		"milestone":"applicationrecieved"
+	},
+    "close":{
+      "id":"close",
+      "name":"Close Application",
+      "description":"Close candidate application",
+      "role":["admin"],
+      "milestone":"closed"
+    },
+    "shortlist":{
+      "id":"shortlist",
+      "name":"Shortlist application",
+      "description":"Shortlist candidate for further process",
+      "role":"admin",
+      "milestone":"shortlisted"
+    },
+    "scheduleinterview":{
+      "id":"scheduleinterview",
+      "name":"Schedule Interview",
+      "description":"Setup a time to conduct candidate interview",
+      "role":["admin"],
+      "milestone":"interviewscheduled"
+    },
+    "interview":{
+      "id":"interview",
+      "name":"Interview",
+      "description":"Interview candidate",
+      "role":["admin"],
+      "milestone":"interviewcompleted"
+    },
+    "sendoffer":{
+      "id":"sendoffer",
+      "name":"Send Offer",
+      "description":"Send job offer to selected candidate",
+      "role":["admin"],
+      "milestone":"offersent"
+    },
+    "acceptoffer":{
+      "id":"acceptoffer",
+      "name":"Accept Offer",
+      "description":"Do this when candidate accepts offer",
+      "role":["candidate"],
+      "milestone":"offeraccepted"
+    },
+    "rejectoffer":{
+      "id":"rejectoffer",
+      "name":"Reject Offer",
+      "description":"Do this when candidate rejects offer",
+      "role":["candidate"],
+      "milestone":"offerrejected"
+    },
+    "withdrawoffer":{
+      "id":"withdrawoffer",
+      "name":"Withdraw offer",
+      "description":"Withdraw given offer",
+      "role":["admin"],
+      "milestone":"offerwithdrawn"
+    },
+    "createemployeerecord":{
+      "id":"createemployeerecord",
+      "name":"Create Employee Record",
+      "description":"Crate the employee recored after he is selected",
+      "role":["admin"],
+      "milestone":"employeerecordcreated"
+    }
+  },
+  "milestones": {
+	"new": {
+      "id":"new",
+      "name":"New",
+      "description":"Starting point of any document",
+      "role":["candidate"],
+      "actions": ["apply"]
+    },
+    "applicationrecieved": {
+      "id":"applicationrecieved",
+      "name":"Application Recieved",
+      "description":"Candidates aplication for a given position recieved",
+      "role":["admin"],
+      "actions": ["close","shortlist"]
+    },
+    "shortlisted": {
+      "id":"shortlisted",
+      "name":"shortlisted",
+      "description":"Candidate is shortlisted for the interview",
+      "role":["admin"],
+      "actions": ["close","scheduleinterview"]
+    },
+    "interviewscheduled": {
+      "id":"interviewscheduled",
+      "name":"Interview Sheduled",
+      "description":"Candidate scheduled for the interview",
+      "role":["admin"],
+      "actions": ["close", "interview"]
+    },
+    "interviewcompleted": {
+      "id":"interviewcompleted",
+      "name":"Interview Completed",
+      "description":"Interview is conducted awaiting results",
+      "role":["admin"],
+      "actions": ["sendoffer", "close"]
+    },
+    "offersent": {
+      "id":"offersent",
+      "name":"Offer sent to the candidate",
+      "description":"The document is returned to the writer for modifications",
+      "role":["admin", "_owners"],
+      "actions": ["rejectoffer", "acceptoffer", "close", "withdrawoffer"]
+    },
+    "offeraccepted": {
+      "id":"offeraccepted",
+      "name":"Offer Accepted",
+      "description":"Candidate has accepted the offer",
+      "role":["admin"],
+      "actions": ["withdrawoffer", "close", "createemployeerecord"]
+    },
+    "offerwithdrawn": {
+      "id":"offerwithdrawn",
+      "name":"Offerwithdrawn",
+      "description":"Offer withdwarn",
+      "role":["admin"],
+      "actions": ["close"]
+    },
+    "offerrejected": {
+      "id":"offerrejected",
+      "name":"Offer rejected",
+      "description":"Offer declined by the candidate",
+      "role":["admin"],
+      "actions": ["close"]
+    },
+    "employeerecordcreated": {
+      "id":"employeerecordcreated",
+      "name":"employeerecordcreated",
+      "description":"The document is published to the live site",
+      "role":["admin"],
+      "actions": []
+    },
+    "closed": {
+      "id":"closed",
+      "name":"Closed",
+      "description":"Offer closed",
+      "role":["admin"],
+      "actions": []
+    }
+  }
+}
+
+
+	function getNodes(){
+		var milestones = [];
+		for(var key in workflowModel.milestones){
+			milestones.push({name: key});
+		}
+		return milestones;
+	}
+	
+	function buildEdges(){
+		var milestones = getNodes();
+		var edges = [];
+		for(var key in workflowModel.milestones){
+			var milestone = key;
+			
+			var actions = workflowModel.milestones[key].actions;
+			for(var i=0; i<actions.length; i++){
+				var targetMilestone = null;
+				var target = null;
+				var action = null;
+				var source = milestones.findIndex(function(x){ return x.name === milestone});
+				if(typeof actions[i] === 'string'){
+					action = actions[i];
+					targetMilestone = workflowModel.actions[action].milestone;
+				} else if(typeof actions[i] === 'object'){
+					action = actions[i].id;
+					if(actions[i].milestone){
+						targetMilestone = actions[i].milestone;
+					} else {
+						targetMilestone = workflowModel.actions[action].milestone;
+					}
+				}
+				if(targetMilestone){
+					if(targetMilestone === '_lastmilestone'){
+						var target = source;
+					} else {
+						var target = milestones.findIndex(function(x){ return x.name === targetMilestone});
+					}
+					edges.push({source: source, target: target, label: action});
+				}
+			}
+		}
+		return edges;
+	}
+    var w = 2000;
+    var h = 1600;
+    var linkDistance=500;
+
+    var colors = d3.scale.category10();
+
+    var dataset = {
+
+    nodes: getNodes(),
+    edges: buildEdges()
+    };
+
+ 
+    var svg = d3.select("body").append("svg").attr({"width":w,"height":h});
+
+    var force = d3.layout.force()
+        .nodes(dataset.nodes)
+        .links(dataset.edges)
+        .size([w,h])
+        .linkDistance([linkDistance])
+        .charge([-500])
+        .theta(0.1)
+        .gravity(0.05)
+        .start();
+
+ 
+
+    var edges = svg.selectAll("line")
+      .data(dataset.edges)
+      .enter()
+      .append("line")
+      .attr("id",function(d,i) {  return 'edge'+i})
+      .attr('marker-end','url(#arrowhead)')
+      .style("stroke","#000")
+      .style("pointer-events", "none");
+    
+    var nodes = svg.selectAll("circle")
+      .data(dataset.nodes)
+      .enter()
+      .append("circle")
+      .attr({"r":35})
+      .style("fill",function(d,i){return colors(i);})
+      .call(force.drag)
+
+
+    var nodelabels = svg.selectAll(".nodelabel") 
+       .data(dataset.nodes)
+       .enter()
+       .append("text")
+       .attr({"x":function(d){return d.x;},
+              "y":function(d){return d.y;},
+              "class":"nodelabel",
+              "stroke":"black"})
+       .text(function(d){return d.name;});
+
+    var edgepaths = svg.selectAll(".edgepath")
+        .data(dataset.edges)
+        .enter()
+        .append('path')
+        .attr({'d': function(d) {return 'M '+d.source.x+' '+d.source.y+' L '+ d.target.x +' '+d.target.y},
+               'class':'edgepath',
+               'fill-opacity':0,
+               'stroke-opacity':0,
+               'fill':'#000',
+               'stroke':'#000',
+               'id':function(d,i) {return 'edgepath'+i}})
+        .style("pointer-events", "none");
+
+    var edgelabels = svg.selectAll(".edgelabel")
+        .data(dataset.edges)
+        .enter()
+        .append('text')
+        .style("pointer-events", "none")
+        .attr({'class':'edgelabel',
+               'id':function(d,i){return 'edgelabel'+i},
+               'dx':200,
+               'dy':0,
+               'font-size':20,
+               'fill':'blue'});
+
+    edgelabels.append('textPath')
+        .attr('xlink:href',function(d,i) {return '#edgepath'+i})
+        .style("pointer-events", "none")
+        .text(function(d,i){console.log(d); return d.label});
+
+
+    svg.append('defs').append('marker')
+        .attr({'id':'arrowhead',
+               'viewBox':'-0 -5 10 10',
+               'refX':45,
+               'refY':0,
+               //'markerUnits':'strokeWidth',
+               'orient':'auto',
+               'markerWidth':10,
+               'markerHeight':10,
+               'xoverflow':'visible'})
+        .append('svg:path')
+            .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
+            .attr('fill', '#000')
+            .attr('stroke','#000');
+     
+
+    force.on("tick", function(){
+
+        edges.attr({"x1": function(d){return d.source.x;},
+                    "y1": function(d){return d.source.y;},
+                    "x2": function(d){return d.target.x;},
+                    "y2": function(d){return d.target.y;}
+        });
+
+        nodes.attr({"cx":function(d){return d.x;},
+                    "cy":function(d){return d.y;}
+        });
+
+        nodelabels.attr("x", function(d) { return d.x; }) 
+                  .attr("y", function(d) { return d.y; });
+
+        edgepaths.attr('d', function(d) { var path='M '+d.source.x+' '+d.source.y+' L '+ d.target.x +' '+d.target.y;
+                                           //console.log(d)
+                                           return path});       
+
+        edgelabels.attr('transform',function(d,i){
+            if (d.target.x<d.source.x){
+                bbox = this.getBBox();
+                rx = bbox.x+bbox.width/2;
+                ry = bbox.y+bbox.height/2;
+                return 'rotate(180 '+rx+' '+ry+')';
+                }
+            else {
+                return 'rotate(0)';
+                }
+        });
+    });
+
+</script>
+
+</body>
+</html>
